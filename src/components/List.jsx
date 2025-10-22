@@ -1,3 +1,17 @@
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import {
+  DndContext,
+  closestCenter,
+  useSensor,
+  useSensors,
+  PointerSensor,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { CircleCheck, Edit, Plane, RefreshCcw, Trash } from "lucide-react";
 import { useState } from "react";
 
@@ -35,6 +49,7 @@ const Form = () => {
       setEditIndex(null);
     } else {
       const newTask = {
+        id: Date.now(),
         text: formData.taskname,
         description: formData.description,
         duedate: formData.duedate,
@@ -81,6 +96,83 @@ const Form = () => {
     item.text.toLowerCase().includes(search.toLowerCase())
   );
 
+  const pointerSensor = useSensor(PointerSensor);
+  const sensors = useSensors(pointerSensor);
+
+  const SortableItem = ({ item, toggleEffect, handleEdit, onDelete }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } =
+      useSortable({ id: item.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        className="bg-gray-500 w-full rounded-md space-y-2 px-3 py-4 text-white"
+      >
+        <div {...listeners} className="cursor-grab select-none mb-2">
+          ...
+        </div>
+        <h3
+          className={`font-bold text-lg ${
+            item.completed ? "line-through text-gray-400" : ""
+          }`}
+        >
+          {item.text}
+        </h3>
+        <p className="text-sm text-gray-300">{item.description}</p>
+        <p className="text-xs text-yellow-300 font-bold">
+          Due Date: {item.duedate}
+        </p>
+        <div className="flex justify-between">
+          <div>
+            <button className="flex gap-1 items-center" onClick={toggleEffect}>
+              {item.completed ? (
+                <RefreshCcw className="h-5 w-5" />
+              ) : (
+                <CircleCheck className="h-5 w-5" />
+              )}
+              {item.completed ? "Mark Undone" : "Mark Completed"}
+            </button>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              className="flex gap-1 items-center cursor-pointer"
+              onClick={handleEdit}
+            >
+              <Edit className="w-5 h-5" />
+              <span className="font-semibold">Edit</span>
+            </button>
+            <button
+              className="flex gap-1 items-center text-red-700 hover:text-red-800 cursor-pointer"
+              onClick={onDelete}
+            >
+              <Trash className="w-5 h-5" />
+              <span className="font-semibold">Delete</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const handleDragEnd = (e) => {
+    const { active, over } = e;
+
+    if (active.id !== over?.id) {
+      setList((prevList) => {
+        const oldIndex = list.findIndex((item) => item.id === active.id);
+        const newIndex = list.findIndex((item) => item.id === over.id);
+        return arrayMove(prevList, oldIndex, newIndex);
+      });
+    }
+  };
+
   return (
     <div className=" flex justify-center py-8 px-4 sm:px-8">
       <div className="max-w-2xl w-full space-y-6">
@@ -110,60 +202,35 @@ const Form = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredList.map((item, index) => (
-              <div
-                key={index}
-                className="bg-gray-500 w-full rounded-md space-y-2 px-3 py-4 text-white"
-              >
-                <h3
-                  className={`font-bold text-lg ${
-                    item.completed ? "line-through text-gray-400" : ""
-                  }`}
-                >
-                  {item.text}
-                </h3>
-                <p className="text-sm text-gray-300">{item.description}</p>
-                <p className="text-xs text-yellow-300 font-bold">
-                  Due Date: {item.duedate}
-                </p>
-                <div className="flex justify-between">
-                  <div>
-                    <button
-                      className="flex gap-1 items-center"
-                      onClick={() => toggleEffect(index)}
-                    >
-                      {item.completed ? (
-                        <RefreshCcw className="h-5 w-5" />
-                      ) : (
-                        <CircleCheck className="h-5 w-5" />
-                      )}
-                      {item.completed ? "Mark Undone" : "Mark Completed"}
-                    </button>
-                  </div>
-                  <div className="flex space-x-3">
-                    <button
-                      className="flex gap-1 items-center cursor-pointer"
-                      onClick={() => handleEdit(index)}
-                    >
-                      <Edit className="w-5 h-5" />
-                      <span className="font-semibold">Edit</span>
-                    </button>
-                    <button
-                      className="flex gap-1 items-center text-red-700 hover:text-red-800 cursor-pointer"
-                      onClick={() => {
+          <DndContext
+            collisionDetection={closestCenter}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              strategy={verticalListSortingStrategy}
+              items={filteredList.map((item) => item.id)}
+            >
+              <div className="space-y-3">
+                {filteredList.map((item) => {
+                  const fullIndex = list.findIndex((i) => i.id === item.id);
+                  return (
+                    <SortableItem
+                      key={item.id}
+                      item={item}
+                      toggleEffect={() => toggleEffect(fullIndex)}
+                      handleEdit={() => handleEdit(fullIndex)}
+                      setShowDelete={setShowDelete}
+                      onDelete={() => {
+                        setDeleteIndex(fullIndex);
                         setShowDelete(true);
-                        setDeleteIndex(index);
                       }}
-                    >
-                      <Trash className="w-5 h-5" />{" "}
-                      <span className="font-semibold">Delete</span>
-                    </button>
-                  </div>
-                </div>
+                    />
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {showDelete && (
